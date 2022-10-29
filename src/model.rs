@@ -1,5 +1,4 @@
 pub type VersionType = u32;
-pub type EpochMillisType = u64;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Model<IdType, Data>

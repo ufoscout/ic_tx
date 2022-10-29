@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
-mod action;
 pub mod backend;
 pub mod db;
+pub mod error;
 pub mod model;
 pub mod tx;
 

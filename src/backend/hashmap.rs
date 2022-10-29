@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, hash_map::Entry}, cell::RefCell, hash::Hash};
+use std::{collections::{HashMap, hash_map::Entry}, cell::RefCell, hash::Hash, fmt::Display};
 
-use crate::model::{Model, NewModel, VersionType};
+use crate::{model::{Model, NewModel, VersionType}, error::TxError};
 
 use super::Backend;
 
@@ -17,70 +17,70 @@ impl <IdType: Eq + Hash + Clone, Data: Clone> HashmapBackend<IdType, Data> {
 
 }
 
-impl <IdType: Eq + Hash + Clone, Data: Clone> Backend<Data> for HashmapBackend<IdType, Data> {
+impl <IdType: Eq + Hash + Clone + Display, Data: Clone> Backend<Data> for HashmapBackend<IdType, Data> {
 
     type IdType = IdType;
-    type Error = ();
 
-    fn fetch_one(&self, id: &Self::IdType) -> Result<Model<Self::IdType, Data>, Self::Error> {
+    fn fetch_one(&self, id: &Self::IdType) -> Result<Model<Self::IdType, Data>, TxError> {
         match self.fetch_option_one(id) {
-            Ok(opt) => opt.ok_or_else(|| ()),
+            Ok(opt) => opt.ok_or_else(|| TxError::FetchNotFoundError { message: format!("Cannot find model with id [{id}]") }),
             Err(e) => Err(e)
         }
     }
 
-    fn fetch_option_one(&self, id: &Self::IdType) -> Result<Option<Model<Self::IdType, Data>>, Self::Error> {
+    fn fetch_option_one(&self, id: &Self::IdType) -> Result<Option<Model<Self::IdType, Data>>, TxError> {
         Ok(self.map.borrow().get(id).map(|val| (*val).clone()))
     }
 
-    fn fetch_version(&self, id: &Self::IdType) -> Result<VersionType, Self::Error> {
+    fn fetch_version(&self, id: &Self::IdType) -> Result<VersionType, TxError> {
         match self.fetch_option_version(id) {
-            Ok(opt) => opt.ok_or_else(|| ()),
+            Ok(opt) => opt.ok_or_else(|| TxError::FetchNotFoundError { message: format!("Cannot find model with id [{id}]") }),
             Err(e) => Err(e)
         }
     }
 
-    fn fetch_option_version(&self, id: &Self::IdType) -> Result<Option<VersionType>, Self::Error> {
+    fn fetch_option_version(&self, id: &Self::IdType) -> Result<Option<VersionType>, TxError> {
         Ok(self.map.borrow().get(id).map(|val| val.version))
     }
 
-    fn update(&self, model: Model<Self::IdType, Data>) -> Result<(), Self::Error> {
+    fn update(&self, model: Model<Self::IdType, Data>) -> Result<(), TxError> {
         let mut map = self.map.borrow_mut();
         
         match map.entry(model.id.clone()) {
             Entry::Occupied(mut previous) => {
-                if previous.get().version == model.version {
+                let previous_version = previous.get().version;
+                if previous_version == model.version {
                     let updated_model = model.into_new_version();
                     previous.insert(updated_model);
                     Ok(())
                 } else {
-                    Err(())
+                    Err(TxError::UpdateOptimisticLockError { message: format!("Cannot update model with id [{}]. Expected version [{}], version found [{}]", model.id, model.version, previous_version) })
                 }
             },
-            Entry::Vacant(_) => Err(()),
+            Entry::Vacant(_) => Err(TxError::UpdateError { message: format!("Cannot update model with id [{}] because it does not exist.", model.id) }),
         }
     }
 
-    fn delete(&self, id: &Self::IdType) -> Result<(), Self::Error> {
+    fn delete(&self, id: &Self::IdType) -> Result<(), TxError> {
         match self.delete_option(id) {
             Ok(opt) => if opt {
                 Ok(())
             } else {
-                Err(())
+                Err(TxError::DeleteError { message: format!("Cannot delete model with id [{}] because it does not exist.", id) })
             },
             Err(e) => Err(e)
         }
     }
 
-    fn delete_option(&self, id: &Self::IdType) -> Result<bool, Self::Error> {
+    fn delete_option(&self, id: &Self::IdType) -> Result<bool, TxError> {
         let mut map = self.map.borrow_mut();
         Ok(map.remove(id).is_some())
     }
 
-    fn save(&self, model: NewModel<Self::IdType, Data>) -> Result<(), Self::Error> {
+    fn save(&self, model: NewModel<Self::IdType, Data>) -> Result<(), TxError> {
         let mut map = self.map.borrow_mut();
         match map.entry(model.id.clone()) {
-            Entry::Occupied(_) => Err(()),
+            Entry::Occupied(_) => Err(TxError::UpdateError { message: format!("Cannot save model with id [{}] because the id is already in use.", model.id) }),
             Entry::Vacant(v) => {
                 v.insert(Model::from_new(model.into()));
                 Ok(())

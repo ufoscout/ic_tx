@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{backend::Backend, tx::Tx, Ref};
+use crate::{backend::Backend, tx::Tx, Ref, model::Model, error::TxError};
 
 pub struct TxMx<Data, B: Backend<Data>> {
     backend: Ref<B>,
@@ -20,6 +20,14 @@ impl <Data, B: Backend<Data>> TxMx<Data, B> {
     /// Starts a new atomic transaction
     pub fn tx(&self) -> Tx<Data, B> {
         Tx::new(self.backend.clone())
+    }
+
+    pub fn fetch_one(&self, id: &B::IdType) -> Result<Model<B::IdType, Data>, TxError> {
+        self.backend.fetch_one(id)
+    }
+
+    pub fn fetch_option_one(&self, id: &B::IdType) -> Result<Option<Model<B::IdType, Data>>, TxError> {
+        self.backend.fetch_option_one(id)
     }
 
 }
