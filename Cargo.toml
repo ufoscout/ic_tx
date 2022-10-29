@@ -1,0 +1,22 @@
+[workspace]
+
+members = [
+    "c3p0_common",
+    "c3p0_in_memory",
+    "c3p0",
+]
+
+[package]
+name = "tx-tm"
+license = "MIT"
+version = "0.0.1"
+authors = ["Francesco Cina <ufoscout@gmail.com>"]
+description = "ACID Transactional Storage with transparent Optimistic Lock support."
+edition = "2021"
+homepage = "https://github.com/ufoscout/tx-mx"
+repository = "https://github.com/ufoscout/tx-mx"
+keywords = ["acid", "storage", "map", "transaction", "IC", "Internet Computer"]
+
+[dependencies]
+log = "0.4"
+#serde = { version = "1.0", features = ["derive"] }
