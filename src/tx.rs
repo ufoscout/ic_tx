@@ -23,9 +23,12 @@ enum Action<IdType, Data> {
     },
 }
 
+const COMMIT_PANIC_MESSAGE: &str = "Cannot commit the transaction";
+
 pub struct Tx<Data, B: Backend<Data>> {
     actions: Vec<Action<B::IdType, Data>>,
     backend: Ref<B>,
+    completed: bool,
     phantom_data: PhantomData<Data>,
 }
 
@@ -34,7 +37,8 @@ impl <Data, B: Backend<Data>> Tx<Data, B> {
     pub(crate) fn new(backend: Ref<B>) -> Self {
         Self { 
             actions: vec![],
-            backend, 
+            backend,
+            completed: false, 
             phantom_data: PhantomData,
         }
     }
@@ -97,7 +101,19 @@ impl <Data, B: Backend<Data>> Tx<Data, B> {
         Ok(())
     }
 
-    pub fn commit(self) -> Result<(), TxError> {
+    /// Commits the transaction. Panics if any error
+    pub fn commit(mut self) {
+        self.inner_commit().expect(COMMIT_PANIC_MESSAGE)
+    }
+
+    fn inner_commit(&mut self) -> Result<(), TxError> {
+
+        if self.completed {
+            return Ok(());
+        }
+
+        self.completed = true;
+
         // Step 1: check that models have the expected version
         for action in &self.actions {
             match action {
@@ -135,7 +151,7 @@ impl <Data, B: Backend<Data>> Tx<Data, B> {
             }
         }
 
-        for action in self.actions {
+        for action in self.actions.drain(..) {
             match action {
                 Action::Create { model } => self.backend.save(model)?,
                 // Action::Read { .. } => (),
@@ -148,8 +164,17 @@ impl <Data, B: Backend<Data>> Tx<Data, B> {
         Ok(())
     }
 
-    pub fn rollback(self) -> Result<(), TxError> {
-        Ok(())
+    pub fn rollback(mut self) {
+        self.completed = true;
+        // Do nothing
+    }
+
+}
+
+impl <Data, B: Backend<Data>> Drop for Tx<Data, B> {
+    
+    fn drop(&mut self) {
+        self.inner_commit().expect(COMMIT_PANIC_MESSAGE);
     }
 
 }
@@ -176,7 +201,7 @@ mod test {
         // Act
         let mut tx = db.tx();
         tx.save(model.clone()).unwrap();
-        tx.commit().unwrap();
+        tx.commit();
 
         let fetched_model = db.fetch_one(&model.id).unwrap();
         let fetched_model_opt = db.fetch_option_one(&model.id).unwrap();
@@ -202,7 +227,7 @@ mod test {
         // Act
         let mut tx = db.tx();
         tx.save(model.clone()).unwrap();
-        tx.rollback().unwrap();
+        tx.rollback();
 
         let fetched_model_opt = db.fetch_option_one(&model.id).unwrap();
         
@@ -211,28 +236,207 @@ mod test {
 
     }
 
-    // #[test]
-    // fn save_should_save_a_model() {
-    //     // Arrange
-    //     let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-    //     let model = NewModel {
-    //         id: 1,
-    //         data: 1123,
-    //     };
+    #[test]
+    fn should_commit_a_tx_when_dropped() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model = NewModel {
+            id: 1,
+            data: 1123,
+        };
 
-    //     // Act
-    //     backend.save(model.clone()).unwrap();
-    //     let fetched_model = backend.fetch_one(&model.id).unwrap();
-    //     let fetched_model_opt = backend.fetch_option_one(&model.id).unwrap();
+        // Act
+        {
+            let mut tx = db.tx();
+            tx.save(model.clone()).unwrap();
+        }
+
+        let fetched_model = db.fetch_one(&model.id).unwrap();
         
-    //     // Assert
-    //     assert_eq!(model.id, fetched_model.id);
-    //     assert_eq!(model.data, fetched_model.data);
-    //     assert_eq!(0, fetched_model.version);
+        // Assert
+        assert_eq!(model.id, fetched_model.id);
+        assert_eq!(model.data, fetched_model.data);
+        assert_eq!(0, fetched_model.version);
 
-    //     assert_eq!(Some(fetched_model), fetched_model_opt);
+    }
 
-    // }
+    #[test]
+    #[should_panic]
+    fn commit_should_panic_if_failure() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+
+        // Act
+        {
+            let mut tx = db.tx();
+            tx.update(Model {
+                id: 1,
+                version: 12,
+                data: 1123,
+            }).unwrap();
+            assert!(true, "The update should succeed");
+            
+            tx.commit();
+            assert!(false, "Should panic before this line");
+        }
+
+    }
+
+    #[test]
+    #[should_panic]
+    fn commit_should_panic_on_drop_if_failure() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+
+        // Act
+        {
+            let mut tx = db.tx();
+            tx.update(Model {
+                id: 1,
+                version: 12,
+                data: 1123,
+            }).unwrap();
+        }
+
+    }
+
+    #[test]
+    fn commit_should_fail_if_concurrent_creation() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model_1 = NewModel {
+            id: 1,
+            data: 1111,
+        };
+
+        let model_2 = NewModel {
+            id: 1,
+            data: 2222,
+        };
+
+        // Act
+        let mut tx_1 = db.tx();
+        tx_1.save(model_1.clone()).unwrap();
+
+        let tx_2_result = {
+            let mut tx_2 = db.tx();
+            tx_2.save(model_2.clone()).unwrap();
+            tx_2.inner_commit()
+        };
+
+        let tx_1_result = tx_1.inner_commit();
+
+        let fetched_model = db.fetch_one(&model_1.id).unwrap();
+        
+        // Assert
+        assert!(tx_2_result.is_ok());
+        assert!(tx_1_result.is_err());
+
+        assert_eq!(model_2.id, fetched_model.id);
+        assert_eq!(model_2.data, fetched_model.data);
+        assert_eq!(0, fetched_model.version);
+
+    }
+
+    #[test]
+    fn commit_should_fail_if_concurrent_update() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model_1 = NewModel {
+            id: 1,
+            data: 1111,
+        };
+        {
+            let mut tx = db.tx();
+            tx.save(model_1.clone()).unwrap();
+        }
+        let model_1 = db.fetch_one(&model_1.id).unwrap();
+
+        // Act
+        let mut tx_1 = db.tx();
+        tx_1.update(model_1.clone()).unwrap();
+
+        let tx_2_result = {
+            let mut tx_2 = db.tx();
+            tx_2.update(Model { id: model_1.id, version: model_1.version, data: 2222 }).unwrap();
+            tx_2.inner_commit()
+        };
+
+        let tx_1_result = tx_1.inner_commit();
+
+        let fetched_model = db.fetch_one(&model_1.id).unwrap();
+        
+        // Assert
+        assert!(tx_2_result.is_ok());
+        assert!(tx_1_result.is_err());
+
+        assert_eq!(model_1.id, fetched_model.id);
+        assert_eq!(2222, fetched_model.data);
+        assert_eq!(1, fetched_model.version);
+
+    }
+
+    #[test]
+    fn commit_should_fail_if_concurrent_delete() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model_1 = NewModel {
+            id: 1,
+            data: 1111,
+        };
+        {
+            let mut tx = db.tx();
+            tx.save(model_1.clone()).unwrap();
+        }
+        let model_1 = db.fetch_one(&model_1.id).unwrap();
+
+        // Act
+        let mut tx_1 = db.tx();
+        tx_1.delete(&model_1.id).unwrap();
+
+        let tx_2_result = {
+            let mut tx_2 = db.tx();
+            tx_2.delete(&model_1.id).unwrap();
+            tx_2.inner_commit()
+        };
+
+        let tx_1_result = tx_1.inner_commit();
+
+        let fetched_model = db.fetch_option_one(&model_1.id).unwrap();
+        
+        // Assert
+        assert!(tx_2_result.is_ok());
+        assert!(tx_1_result.is_err());
+
+        assert!(fetched_model.is_none());
+
+    }
+
+    #[test]
+    fn save_should_save_a_model() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model = NewModel {
+            id: 1,
+            data: 1123,
+        };
+
+        // Act
+        let mut tx = db.tx();
+        tx.save(model.clone()).unwrap();
+        tx.commit();
+
+        let fetched_model = db.fetch_one(&model.id).unwrap();
+        let fetched_model_opt = db.fetch_option_one(&model.id).unwrap();
+        
+        // Assert
+        assert_eq!(model.id, fetched_model.id);
+        assert_eq!(model.data, fetched_model.data);
+        assert_eq!(0, fetched_model.version);
+
+        assert_eq!(Some(fetched_model), fetched_model_opt);
+
+    }
 
     // #[test]
     // fn save_should_fail_if_key_exists() {
