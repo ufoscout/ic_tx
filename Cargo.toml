@@ -12,7 +12,7 @@ description = "ACID Transactional Storage with transparent Optimistic Lock suppo
 edition = "2021"
 homepage = "https://github.com/ufoscout/ic_tx"
 repository = "https://github.com/ufoscout/ic_tx"
-keywords = ["acid", "storage", "map", "transaction", "IC", "Internet Computer"]
+keywords = ["acid", "storage", "map", "transaction", "IC", "internet-computer"]
 
 [dependencies]
 candid = { version = "0.8", optional = true }
