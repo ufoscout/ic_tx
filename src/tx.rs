@@ -171,14 +171,6 @@ impl <Data, B: Backend<Data>> Tx<Data, B> {
 
 }
 
-impl <Data, B: Backend<Data>> Drop for Tx<Data, B> {
-    
-    fn drop(&mut self) {
-        self.inner_commit().expect(COMMIT_PANIC_MESSAGE);
-    }
-
-}
-
 
 #[cfg(test)]
 mod test {
@@ -237,30 +229,6 @@ mod test {
     }
 
     #[test]
-    fn should_commit_a_tx_when_dropped() {
-        // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model = NewModel {
-            id: 1,
-            data: 1123,
-        };
-
-        // Act
-        {
-            let mut tx = db.tx();
-            tx.save(model.clone()).unwrap();
-        }
-
-        let fetched_model = db.fetch_one(&model.id).unwrap();
-        
-        // Assert
-        assert_eq!(model.id, fetched_model.id);
-        assert_eq!(model.data, fetched_model.data);
-        assert_eq!(0, fetched_model.version);
-
-    }
-
-    #[test]
     #[should_panic]
     fn commit_should_panic_if_failure() {
         // Arrange
@@ -278,24 +246,6 @@ mod test {
             
             tx.commit();
             assert!(false, "Should panic before this line");
-        }
-
-    }
-
-    #[test]
-    #[should_panic]
-    fn commit_should_panic_on_drop_if_failure() {
-        // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-
-        // Act
-        {
-            let mut tx = db.tx();
-            tx.update(Model {
-                id: 1,
-                version: 12,
-                data: 1123,
-            }).unwrap();
         }
 
     }
@@ -349,6 +299,7 @@ mod test {
         {
             let mut tx = db.tx();
             tx.save(model_1.clone()).unwrap();
+            tx.commit()
         }
         let model_1 = db.fetch_one(&model_1.id).unwrap();
 
@@ -387,6 +338,8 @@ mod test {
         {
             let mut tx = db.tx();
             tx.save(model_1.clone()).unwrap();
+            tx.commit()
+
         }
         let model_1 = db.fetch_one(&model_1.id).unwrap();
 
@@ -438,228 +391,246 @@ mod test {
 
     }
 
-    // #[test]
-    // fn save_should_fail_if_key_exists() {
-    //     // Arrange
-    //     let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-    //     let model = NewModel {
-    //         id: 1,
-    //         data: 1123,
-    //     };
+    #[test]
+    fn save_should_fail_if_key_exists() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model = NewModel {
+            id: 1,
+            data: 1123,
+        };
 
-    //     // Act
-    //     let first_save = backend.save(model.clone());
-    //     let second_save = backend.save(model.clone());
-    //     let fetched_model = backend.fetch_one(&model.id).unwrap();
+        // Act
+        let first_save = {
+            let mut tx = db.tx();
+            tx.save(model.clone()).unwrap();
+            tx.inner_commit()
+        };
+        let second_save = {
+            let mut tx = db.tx();
+            tx.save(model.clone()).unwrap();
+            tx.inner_commit()
+        };
+        let fetched_model = db.fetch_one(&model.id).unwrap();
         
-    //     // Assert
-    //     assert!(first_save.is_ok());
-    //     assert!(second_save.is_err());
-    //     assert_eq!(model.id, fetched_model.id);
-    //     assert_eq!(model.data, fetched_model.data);
-    //     assert_eq!(0, fetched_model.version);
+        // Assert
+        assert!(first_save.is_ok());
+        assert!(second_save.is_err());
+        assert_eq!(model.id, fetched_model.id);
+        assert_eq!(model.data, fetched_model.data);
+        assert_eq!(0, fetched_model.version);
 
-    // }
+    }
 
-    // #[test]
-    // fn fetch_one_should_fail_if_missing() {
-    //     // Arrange
-    //     let backend = HashmapBackend::<i32, i32>::new();
+    #[test]
+    fn fetch_one_should_fail_if_missing() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
 
-    //     // Act
-    //     let fetched_model = backend.fetch_one(&0);
+        // Act
+        let fetched_model_0 = db.fetch_one(&0);
+        let fetched_model_1 = db.tx().fetch_one(&0);
         
-    //     // Assert
-    //     assert!(fetched_model.is_err());
+        // Assert
+        assert!(fetched_model_0.is_err());
+        assert!(fetched_model_1.is_err());
 
-    // }
+    }
 
-    // #[test]
-    // fn fetch_option_one_should_return_none_if_missing() {
-    //     // Arrange
-    //     let backend = HashmapBackend::<i32, i32>::new();
+    #[test]
+    fn fetch_option_one_should_return_none_if_missing() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
 
-    //     // Act
-    //     let fetched_model = backend.fetch_option_one(&0).unwrap();
+        // Act
+        let fetched_model_0 = db.fetch_option_one(&0).unwrap();
+        let fetched_model_1 = db.tx().fetch_option_one(&0).unwrap();
         
-    //     // Assert
-    //     assert!(fetched_model.is_none());
+        // Assert
+        assert!(fetched_model_0.is_none());
+        assert!(fetched_model_1.is_none());
 
-    // }
+    }
 
-    // #[test]
-    // fn should_return_the_version() {
-    //     // Arrange
-    //     let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-    //     let model = NewModel {
-    //         id: 1,
-    //         data: 1123,
-    //     };
+    #[test]
+    fn update_should_update_a_model() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model = NewModel {
+            id: 1,
+            data: 1111,
+        };
+        {
+            let mut tx = db.tx();
+            tx.save(model.clone()).unwrap();
+            tx.commit();
+        }
+        let fetched_model_0 = db.fetch_one(&model.id).unwrap();
 
-    //     // Act
-    //     backend.save(model.clone()).unwrap();
-    //     let fetched_version = backend.fetch_version(&model.id).unwrap();
+        // Act
+        let mut tx = db.tx();
+        let mut updated_model = fetched_model_0.clone();
+        updated_model.data = 2222;
+        tx.update(updated_model.clone()).unwrap();
+        tx.commit();
+        let fetched_model_1 = db.fetch_one(&model.id).unwrap();
         
-    //     // Assert
-    //     assert_eq!(0, fetched_version);
+        // Assert
+        assert_eq!(model.id, fetched_model_0.id);
+        assert_eq!(model.data, fetched_model_0.data);
+        assert_eq!(0, fetched_model_0.version);
 
-    // }
+        assert_eq!(model.id, fetched_model_1.id);
+        assert_eq!(updated_model.data, fetched_model_1.data);
+        assert_eq!(1, fetched_model_1.version);
+    }
 
-    // #[test]
-    // fn fetch_version_should_fail_if_missing() {
-    //     // Arrange
-    //     let backend = HashmapBackend::<i32, i32>::new();
+    #[test]
+    fn update_should_fail_if_key_does_not_exists() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model = Model {
+            id: 1,
+            version: 0,
+            data: 1111,
+        };
 
-    //     // Act
-    //     let fetched_model = backend.fetch_version(&0);
+        // Act
+        let update_result = {
+            let mut tx = db.tx();
+            tx.update(model.clone()).unwrap();
+            tx.inner_commit()
+        };
+        let fetched_model = db.fetch_option_one(&model.id).unwrap();
         
-    //     // Assert
-    //     assert!(fetched_model.is_err());
+        // Assert
+        assert!(update_result.is_err());
+        assert!(fetched_model.is_none());
 
-    // }
+    }
 
-    // #[test]
-    // fn fetch_option_version_should_return_none_if_missing() {
-    //     // Arrange
-    //     let backend = HashmapBackend::<i32, i32>::new();
+    #[test]
+    fn update_should_fail_if_version_mismatch() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model = NewModel {
+            id: 1,
+            data: 1111,
+        };
+        {
+            let mut tx = db.tx();
+            tx.save(model.clone()).unwrap();
+            tx.commit();
+        }
+        let fetched_model_0 = db.fetch_one(&model.id).unwrap();
 
-    //     // Act
-    //     let fetched_model = backend.fetch_option_version(&0).unwrap();
+        // Act
+        let result_1 =         {
+            let mut tx = db.tx();
+            tx.update(fetched_model_0.clone()).unwrap();
+            tx.inner_commit()
+        };
+        // this should fail because the version does not match
+        let result_2 =         {
+            let mut tx = db.tx();
+            tx.update(fetched_model_0.clone()).unwrap();
+            tx.inner_commit()
+        };
         
-    //     // Assert
-    //     assert!(fetched_model.is_none());
-
-    // }
-
-    // #[test]
-    // fn update_should_update_a_model() {
-    //     // Arrange
-    //     let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-    //     let model = NewModel {
-    //         id: 1,
-    //         data: 1111,
-    //     };
-    //     backend.save(model.clone()).unwrap();
-    //     let fetched_model_0 = backend.fetch_one(&model.id).unwrap();
-
-    //     // Act
-    //     let mut updated_model = fetched_model_0.clone();
-    //     updated_model.data = 2222;
-    //     backend.update(updated_model.clone()).unwrap();
-    //     let fetched_model_1 = backend.fetch_one(&model.id).unwrap();
+        let fetched_model_1 = db.fetch_one(&model.id).unwrap();
+        let result_3 = {
+            let mut tx = db.tx();
+            tx.update(fetched_model_1.clone()).unwrap();
+            tx.inner_commit()
+        };
+        let fetched_model_2 = db.fetch_one(&model.id).unwrap();
         
-    //     // Assert
-    //     assert_eq!(model.id, fetched_model_0.id);
-    //     assert_eq!(model.data, fetched_model_0.data);
-    //     assert_eq!(0, fetched_model_0.version);
+        // Assert
+        assert_eq!(model.id, fetched_model_0.id);
+        assert_eq!(model.data, fetched_model_0.data);
+        assert_eq!(0, fetched_model_0.version);
 
-    //     assert_eq!(model.id, fetched_model_1.id);
-    //     assert_eq!(updated_model.data, fetched_model_1.data);
-    //     assert_eq!(1, fetched_model_1.version);
-    // }
+        assert!(result_1.is_ok());
+        assert!(result_2.is_err());
+        assert!(result_3.is_ok());
 
-    // #[test]
-    // fn update_should_fail_if_key_does_not_exists() {
-    //     // Arrange
-    //     let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-    //     let model = Model {
-    //         id: 1,
-    //         version: 0,
-    //         data: 1111,
-    //     };
+        assert_eq!(model.id, fetched_model_1.id);
+        assert_eq!(1, fetched_model_1.version);
 
-    //     // Act
-    //     let update_result = backend.update(model.clone());
-    //     let fetched_model = backend.fetch_option_one(&model.id).unwrap();
+        assert_eq!(model.id, fetched_model_2.id);
+        assert_eq!(2, fetched_model_2.version);
+    }
+
+    #[test]
+    fn delete_should_delete_a_model() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model = NewModel {
+            id: 1,
+            data: 1123,
+        };
+        {
+            let mut tx = db.tx();
+            tx.save(model.clone()).unwrap();
+            tx.commit();
+        }
+
+        // Act
+        let fetched_before = db.fetch_option_one(&model.id).unwrap();
+        let delete_result_1 = {
+            let mut tx = db.tx();
+            tx.delete(&model.id).unwrap();
+            tx.inner_commit()
+        };
+        let fetched_after = db.fetch_option_one(&model.id).unwrap();
+        let delete_result_2 = {
+            let mut tx = db.tx();
+            tx.delete(&model.id).unwrap();
+            tx.inner_commit()
+        };
         
-    //     // Assert
-    //     assert!(update_result.is_err());
-    //     assert!(fetched_model.is_none());
+        // Assert
+        assert!(fetched_before.is_some());
+        assert!(delete_result_1.is_ok());
+        assert!(fetched_after.is_none());
+        assert!(delete_result_2.is_err());
 
-    // }
+    }
 
-    // #[test]
-    // fn update_should_fail_if_version_mismatch() {
-    //     // Arrange
-    //     let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-    //     let model = NewModel {
-    //         id: 1,
-    //         data: 1111,
-    //     };
-    //     backend.save(model.clone()).unwrap();
-    //     let fetched_model_0 = backend.fetch_one(&model.id).unwrap();
+    #[test]
+    fn delete_option_should_delete_a_model() {
+        // Arrange
+        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let model = NewModel {
+            id: 1,
+            data: 1123,
+        };
+        {
+            let mut tx = db.tx();
+            tx.save(model.clone()).unwrap();
+            tx.commit();
+        }
 
-    //     // Act
-    //     let result_1 = backend.update(fetched_model_0.clone());
-    //     // this should fail because the version does not match
-    //     let result_2 = backend.update(fetched_model_0.clone());
+        // Act
+        let fetched_before = db.fetch_option_one(&model.id).unwrap();
+        let delete_result_1 = {
+            let mut tx = db.tx();
+            tx.delete_option(&model.id).unwrap();
+            tx.inner_commit()
+        };
+        let fetched_after = db.fetch_option_one(&model.id).unwrap();
+        let delete_result_2 = {
+            let mut tx = db.tx();
+            tx.delete_option(&model.id).unwrap();
+            tx.inner_commit()
+        };
         
-    //     let fetched_model_1 = backend.fetch_one(&model.id).unwrap();
-    //     let result_3 = backend.update(fetched_model_1.clone());
-    //     let fetched_model_2 = backend.fetch_one(&model.id).unwrap();
-        
-    //     // Assert
-    //     assert_eq!(model.id, fetched_model_0.id);
-    //     assert_eq!(model.data, fetched_model_0.data);
-    //     assert_eq!(0, fetched_model_0.version);
+        // Assert
+        assert!(fetched_before.is_some());
+        assert!(delete_result_1.is_ok());
+        assert!(fetched_after.is_none());
+        assert!(!delete_result_2.is_ok());
 
-    //     assert!(result_1.is_ok());
-    //     assert!(result_2.is_err());
-    //     assert!(result_3.is_ok());
-
-    //     assert_eq!(model.id, fetched_model_1.id);
-    //     assert_eq!(1, fetched_model_1.version);
-
-    //     assert_eq!(model.id, fetched_model_2.id);
-    //     assert_eq!(2, fetched_model_2.version);
-    // }
-
-    // #[test]
-    // fn delete_should_delete_a_model() {
-    //     // Arrange
-    //     let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-    //     let model = NewModel {
-    //         id: 1,
-    //         data: 1123,
-    //     };
-    //     backend.save(model.clone()).unwrap();
-
-    //     // Act
-    //     let fetched_before = backend.fetch_option_one(&model.id).unwrap();
-    //     let delete_result_1 = backend.delete(&model.id);
-    //     let fetched_after = backend.fetch_option_one(&model.id).unwrap();
-    //     let delete_result_2 = backend.delete(&model.id);
-        
-    //     // Assert
-    //     assert!(fetched_before.is_some());
-    //     assert!(delete_result_1.is_ok());
-    //     assert!(fetched_after.is_none());
-    //     assert!(delete_result_2.is_err());
-
-    // }
-
-    // #[test]
-    // fn delete_option_should_delete_a_model() {
-    //     // Arrange
-    //     let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-    //     let model = NewModel {
-    //         id: 1,
-    //         data: 1123,
-    //     };
-    //     backend.save(model.clone()).unwrap();
-
-    //     // Act
-    //     let fetched_before = backend.fetch_option_one(&model.id).unwrap();
-    //     let delete_result_1 = backend.delete_option(&model.id).unwrap();
-    //     let fetched_after = backend.fetch_option_one(&model.id).unwrap();
-    //     let delete_result_2 = backend.delete_option(&model.id).unwrap();
-        
-    //     // Assert
-    //     assert!(fetched_before.is_some());
-    //     assert!(delete_result_1);
-    //     assert!(fetched_after.is_none());
-    //     assert!(!delete_result_2);
-
-    // }
+    }
 
 }

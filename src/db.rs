@@ -7,6 +7,11 @@ pub struct TxMx<Data, B: Backend<Data>> {
     phantom_data: PhantomData<Data>,
 }
 
+impl <Data, B: Backend<Data>> Clone for TxMx<Data, B> {
+    fn clone(&self) -> Self {
+        Self { backend: self.backend.clone(), phantom_data: PhantomData }
+    }
+}
 
 impl <Data, B: Backend<Data>> TxMx<Data, B> {
 

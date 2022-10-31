@@ -1,6 +1,8 @@
+use candid::{CandidType, Deserialize};
+
 pub type VersionType = u32;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, CandidType, Deserialize)]
 pub struct Model<IdType, Data>
 {
     pub id: IdType,
@@ -34,7 +36,7 @@ impl<IdType, Data> Model<IdType, Data> {
 }
 
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, CandidType, Deserialize)]
 pub struct NewModel<IdType, Data>
 {
     pub id: IdType,
