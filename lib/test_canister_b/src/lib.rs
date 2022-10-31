@@ -1,4 +1,4 @@
-use ic_canister::{PreUpdate};
+use ic_canister::PreUpdate;
 use ic_exports::ic_cdk::export::candid::{CandidType, Deserialize, Principal};
 use ic_storage::{stable::Versioned, IcStorage};
 use std::{cell::RefCell, rc::Rc};
@@ -26,7 +26,6 @@ pub trait CanisterB: Canister {
     fn get_counter(&self) -> u32 {
         self.state().borrow().counter
     }
-
 }
 
 generate_exports!(CanisterB, CanisterBImpl);
