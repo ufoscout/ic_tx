@@ -2,10 +2,18 @@
   "version": 1,
   "dfx": "0.11.2",
   "canisters": {
-    "integration_tests": {
+    "test_canister_a": {
       "type": "rust",
-      "package": "integration_tests",
-      "candid": "lib/src/integration_tests/integration_tests.did"
+      "package": "test_canister_a",
+      "candid": "lib/test_canister_a/test_canister_a.did",
+      "dependencies": [
+        "test_canister_b"
+      ]
+    },
+    "test_canister_b": {
+      "type": "rust",
+      "package": "test_canister_b",
+      "candid": "lib/test_canister_b/test_canister_b.did"
     }
   },
   "defaults": {

@@ -2,18 +2,18 @@ use std::marker::PhantomData;
 
 use crate::{backend::Backend, tx::Tx, Ref, model::Model, error::TxError};
 
-pub struct TxMx<Data, B: Backend<Data>> {
+pub struct IcTx<Data, B: Backend<Data>> {
     backend: Ref<B>,
     phantom_data: PhantomData<Data>,
 }
 
-impl <Data, B: Backend<Data>> Clone for TxMx<Data, B> {
+impl <Data, B: Backend<Data>> Clone for IcTx<Data, B> {
     fn clone(&self) -> Self {
         Self { backend: self.backend.clone(), phantom_data: PhantomData }
     }
 }
 
-impl <Data, B: Backend<Data>> TxMx<Data, B> {
+impl <Data, B: Backend<Data>> IcTx<Data, B> {
 
     pub fn new(backend: Ref<B>) -> Self {
         Self { 

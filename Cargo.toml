@@ -4,18 +4,22 @@ members = [
 ]
 
 [package]
-name = "tx-mx"
+name = "ic_tx"
 license = "MIT"
 version = "0.0.1"
 authors = ["Francesco Cina <ufoscout@gmail.com>"]
 description = "ACID Transactional Storage with transparent Optimistic Lock support."
 edition = "2021"
-homepage = "https://github.com/ufoscout/tx-mx"
-repository = "https://github.com/ufoscout/tx-mx"
+homepage = "https://github.com/ufoscout/ic_tx"
+repository = "https://github.com/ufoscout/ic_tx"
 keywords = ["acid", "storage", "map", "transaction", "IC", "Internet Computer"]
 
 [dependencies]
-candid = "0.8"
+candid = { version = "0.8", optional = true }
 #log = "0.4"
-serde = "1.0"
+serde = { version = "1.0", optional = true }
 thiserror = "1.0.37"
+
+[features]
+default = []
+candid = ["dep:candid", "dep:serde"]

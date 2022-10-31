@@ -1,4 +1,4 @@
-use tx_mx_integration_tests::generate_idl;
+use test_canister_a::generate_idl;
 
 
 fn main() {

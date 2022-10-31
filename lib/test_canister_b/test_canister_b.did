@@ -1,0 +1,1 @@
+service : { get_counter : () -> (nat32) query }

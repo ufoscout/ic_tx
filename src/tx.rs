@@ -177,14 +177,14 @@ mod test {
 
     use std::rc::Rc;
 
-    use crate::{db::TxMx, backend::hashmap::HashmapBackend};
+    use crate::{db::IcTx, backend::hashmap::HashmapBackend};
 
     use super::*;
 
     #[test]
     fn should_commit_a_tx() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model = NewModel {
             id: 1,
             data: 1123,
@@ -210,7 +210,7 @@ mod test {
     #[test]
     fn should_rollback_a_tx() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model = NewModel {
             id: 1,
             data: 1123,
@@ -232,7 +232,7 @@ mod test {
     #[should_panic]
     fn commit_should_panic_if_failure() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
 
         // Act
         {
@@ -253,7 +253,7 @@ mod test {
     #[test]
     fn commit_should_fail_if_concurrent_creation() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model_1 = NewModel {
             id: 1,
             data: 1111,
@@ -291,7 +291,7 @@ mod test {
     #[test]
     fn commit_should_fail_if_concurrent_update() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model_1 = NewModel {
             id: 1,
             data: 1111,
@@ -330,7 +330,7 @@ mod test {
     #[test]
     fn commit_should_fail_if_concurrent_delete() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model_1 = NewModel {
             id: 1,
             data: 1111,
@@ -368,7 +368,7 @@ mod test {
     #[test]
     fn save_should_save_a_model() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model = NewModel {
             id: 1,
             data: 1123,
@@ -394,7 +394,7 @@ mod test {
     #[test]
     fn save_should_fail_if_key_exists() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model = NewModel {
             id: 1,
             data: 1123,
@@ -425,7 +425,7 @@ mod test {
     #[test]
     fn fetch_one_should_fail_if_missing() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
 
         // Act
         let fetched_model_0 = db.fetch_one(&0);
@@ -440,7 +440,7 @@ mod test {
     #[test]
     fn fetch_option_one_should_return_none_if_missing() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
 
         // Act
         let fetched_model_0 = db.fetch_option_one(&0).unwrap();
@@ -455,7 +455,7 @@ mod test {
     #[test]
     fn update_should_update_a_model() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model = NewModel {
             id: 1,
             data: 1111,
@@ -488,7 +488,7 @@ mod test {
     #[test]
     fn update_should_fail_if_key_does_not_exists() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model = Model {
             id: 1,
             version: 0,
@@ -512,7 +512,7 @@ mod test {
     #[test]
     fn update_should_fail_if_version_mismatch() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model = NewModel {
             id: 1,
             data: 1111,
@@ -564,7 +564,7 @@ mod test {
     #[test]
     fn delete_should_delete_a_model() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model = NewModel {
             id: 1,
             data: 1123,
@@ -600,7 +600,7 @@ mod test {
     #[test]
     fn delete_option_should_delete_a_model() {
         // Arrange
-        let db = TxMx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
         let model = NewModel {
             id: 1,
             data: 1123,
