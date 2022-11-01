@@ -1,26 +1,21 @@
 use std::{marker::PhantomData, vec};
 
-use crate::{backend::Backend, Ref, model::{VersionType, Model, NewModel}, error::TxError};
+use crate::{
+    backend::Backend,
+    error::TxError,
+    model::{Model, NewModel, VersionType},
+    Ref,
+};
 
 enum Action<IdType, Data> {
-    Create {
-        model: NewModel<IdType, Data>
-    },
-//    Read {
-//        id: IdType,
-//        version: VersionType
-//    },
-    Update {
-        model: Model<IdType, Data>
-    },
-    Delete {
-        id: IdType,
-        version: VersionType
-    },
-    DeleteOption {
-        id: IdType,
-        version: VersionType
-    },
+    Create { model: NewModel<IdType, Data> },
+    //    Read {
+    //        id: IdType,
+    //        version: VersionType
+    //    },
+    Update { model: Model<IdType, Data> },
+    Delete { id: IdType, version: VersionType },
+    DeleteOption { id: IdType, version: VersionType },
 }
 
 const COMMIT_PANIC_MESSAGE: &str = "Cannot commit the transaction";
@@ -32,13 +27,12 @@ pub struct Tx<Data, B: Backend<Data>> {
     phantom_data: PhantomData<Data>,
 }
 
-impl <Data, B: Backend<Data>> Tx<Data, B> {
-
+impl<Data, B: Backend<Data>> Tx<Data, B> {
     pub(crate) fn new(backend: Ref<B>) -> Self {
-        Self { 
+        Self {
             actions: vec![],
             backend,
-            completed: false, 
+            completed: false,
             phantom_data: PhantomData,
         }
     }
@@ -56,7 +50,10 @@ impl <Data, B: Backend<Data>> Tx<Data, B> {
         result
     }
 
-    pub fn fetch_option_one(&mut self, id: &B::IdType) -> Result<Option<Model<B::IdType, Data>>, TxError> {
+    pub fn fetch_option_one(
+        &mut self,
+        id: &B::IdType,
+    ) -> Result<Option<Model<B::IdType, Data>>, TxError> {
         let result = self.backend.fetch_option_one(id);
         /*
         match &result {
@@ -78,20 +75,26 @@ impl <Data, B: Backend<Data>> Tx<Data, B> {
         let result = self.backend.fetch_version(id);
         match result {
             Ok(version) => {
-                self.actions.push(Action::Delete { id: id.clone(), version });
-            },
-            _ => ()
+                self.actions.push(Action::Delete {
+                    id: id.clone(),
+                    version,
+                });
+            }
+            _ => (),
         };
         Ok(())
     }
-    
+
     pub fn delete_option(&mut self, id: &B::IdType) -> Result<(), TxError> {
         let result = self.backend.fetch_option_version(id);
         match result {
             Ok(Some(version)) => {
-                self.actions.push(Action::DeleteOption { id: id.clone(), version });
-            },
-            _ => ()
+                self.actions.push(Action::DeleteOption {
+                    id: id.clone(),
+                    version,
+                });
+            }
+            _ => (),
         };
         Ok(())
     }
@@ -107,7 +110,6 @@ impl <Data, B: Backend<Data>> Tx<Data, B> {
     }
 
     fn inner_commit(&mut self) -> Result<(), TxError> {
-
         if self.completed {
             return Ok(());
         }
@@ -156,8 +158,10 @@ impl <Data, B: Backend<Data>> Tx<Data, B> {
                 Action::Create { model } => self.backend.save(model)?,
                 // Action::Read { .. } => (),
                 Action::Update { model } => self.backend.update(model)?,
-                Action::Delete { id,  version: _ } => self.backend.delete(&id)?,
-                Action::DeleteOption { id, version: _ } => self.backend.delete_option(&id).map(|_| ())?,
+                Action::Delete { id, version: _ } => self.backend.delete(&id)?,
+                Action::DeleteOption { id, version: _ } => {
+                    self.backend.delete_option(&id).map(|_| ())?
+                }
             }
         }
 
@@ -168,16 +172,14 @@ impl <Data, B: Backend<Data>> Tx<Data, B> {
         self.completed = true;
         // Do nothing
     }
-
 }
-
 
 #[cfg(test)]
 mod test {
 
     use std::rc::Rc;
 
-    use crate::{db::IcTx, backend::hashmap::HashmapBackend};
+    use crate::{backend::hashmap::HashmapBackend, db::IcTx};
 
     use super::*;
 
@@ -185,10 +187,7 @@ mod test {
     fn should_commit_a_tx() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model = NewModel {
-            id: 1,
-            data: 1123,
-        };
+        let model = NewModel { id: 1, data: 1123 };
 
         // Act
         let mut tx = db.tx();
@@ -197,24 +196,20 @@ mod test {
 
         let fetched_model = db.fetch_one(&model.id).unwrap();
         let fetched_model_opt = db.fetch_option_one(&model.id).unwrap();
-        
+
         // Assert
         assert_eq!(model.id, fetched_model.id);
         assert_eq!(model.data, fetched_model.data);
         assert_eq!(0, fetched_model.version);
 
         assert_eq!(Some(fetched_model), fetched_model_opt);
-
     }
 
     #[test]
     fn should_rollback_a_tx() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model = NewModel {
-            id: 1,
-            data: 1123,
-        };
+        let model = NewModel { id: 1, data: 1123 };
 
         // Act
         let mut tx = db.tx();
@@ -222,10 +217,9 @@ mod test {
         tx.rollback();
 
         let fetched_model_opt = db.fetch_option_one(&model.id).unwrap();
-        
+
         // Assert
         assert!(fetched_model_opt.is_none());
-
     }
 
     #[test]
@@ -241,28 +235,22 @@ mod test {
                 id: 1,
                 version: 12,
                 data: 1123,
-            }).unwrap();
+            })
+            .unwrap();
             assert!(true, "The update should succeed");
-            
+
             tx.commit();
             assert!(false, "Should panic before this line");
         }
-
     }
 
     #[test]
     fn commit_should_fail_if_concurrent_creation() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model_1 = NewModel {
-            id: 1,
-            data: 1111,
-        };
+        let model_1 = NewModel { id: 1, data: 1111 };
 
-        let model_2 = NewModel {
-            id: 1,
-            data: 2222,
-        };
+        let model_2 = NewModel { id: 1, data: 2222 };
 
         // Act
         let mut tx_1 = db.tx();
@@ -277,7 +265,7 @@ mod test {
         let tx_1_result = tx_1.inner_commit();
 
         let fetched_model = db.fetch_one(&model_1.id).unwrap();
-        
+
         // Assert
         assert!(tx_2_result.is_ok());
         assert!(tx_1_result.is_err());
@@ -285,17 +273,13 @@ mod test {
         assert_eq!(model_2.id, fetched_model.id);
         assert_eq!(model_2.data, fetched_model.data);
         assert_eq!(0, fetched_model.version);
-
     }
 
     #[test]
     fn commit_should_fail_if_concurrent_update() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model_1 = NewModel {
-            id: 1,
-            data: 1111,
-        };
+        let model_1 = NewModel { id: 1, data: 1111 };
         {
             let mut tx = db.tx();
             tx.save(model_1.clone()).unwrap();
@@ -309,14 +293,19 @@ mod test {
 
         let tx_2_result = {
             let mut tx_2 = db.tx();
-            tx_2.update(Model { id: model_1.id, version: model_1.version, data: 2222 }).unwrap();
+            tx_2.update(Model {
+                id: model_1.id,
+                version: model_1.version,
+                data: 2222,
+            })
+            .unwrap();
             tx_2.inner_commit()
         };
 
         let tx_1_result = tx_1.inner_commit();
 
         let fetched_model = db.fetch_one(&model_1.id).unwrap();
-        
+
         // Assert
         assert!(tx_2_result.is_ok());
         assert!(tx_1_result.is_err());
@@ -324,22 +313,17 @@ mod test {
         assert_eq!(model_1.id, fetched_model.id);
         assert_eq!(2222, fetched_model.data);
         assert_eq!(1, fetched_model.version);
-
     }
 
     #[test]
     fn commit_should_fail_if_concurrent_delete() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model_1 = NewModel {
-            id: 1,
-            data: 1111,
-        };
+        let model_1 = NewModel { id: 1, data: 1111 };
         {
             let mut tx = db.tx();
             tx.save(model_1.clone()).unwrap();
             tx.commit()
-
         }
         let model_1 = db.fetch_one(&model_1.id).unwrap();
 
@@ -356,23 +340,19 @@ mod test {
         let tx_1_result = tx_1.inner_commit();
 
         let fetched_model = db.fetch_option_one(&model_1.id).unwrap();
-        
+
         // Assert
         assert!(tx_2_result.is_ok());
         assert!(tx_1_result.is_err());
 
         assert!(fetched_model.is_none());
-
     }
 
     #[test]
     fn save_should_save_a_model() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model = NewModel {
-            id: 1,
-            data: 1123,
-        };
+        let model = NewModel { id: 1, data: 1123 };
 
         // Act
         let mut tx = db.tx();
@@ -381,24 +361,20 @@ mod test {
 
         let fetched_model = db.fetch_one(&model.id).unwrap();
         let fetched_model_opt = db.fetch_option_one(&model.id).unwrap();
-        
+
         // Assert
         assert_eq!(model.id, fetched_model.id);
         assert_eq!(model.data, fetched_model.data);
         assert_eq!(0, fetched_model.version);
 
         assert_eq!(Some(fetched_model), fetched_model_opt);
-
     }
 
     #[test]
     fn save_should_fail_if_key_exists() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model = NewModel {
-            id: 1,
-            data: 1123,
-        };
+        let model = NewModel { id: 1, data: 1123 };
 
         // Act
         let first_save = {
@@ -412,14 +388,13 @@ mod test {
             tx.inner_commit()
         };
         let fetched_model = db.fetch_one(&model.id).unwrap();
-        
+
         // Assert
         assert!(first_save.is_ok());
         assert!(second_save.is_err());
         assert_eq!(model.id, fetched_model.id);
         assert_eq!(model.data, fetched_model.data);
         assert_eq!(0, fetched_model.version);
-
     }
 
     #[test]
@@ -430,11 +405,10 @@ mod test {
         // Act
         let fetched_model_0 = db.fetch_one(&0);
         let fetched_model_1 = db.tx().fetch_one(&0);
-        
+
         // Assert
         assert!(fetched_model_0.is_err());
         assert!(fetched_model_1.is_err());
-
     }
 
     #[test]
@@ -445,21 +419,17 @@ mod test {
         // Act
         let fetched_model_0 = db.fetch_option_one(&0).unwrap();
         let fetched_model_1 = db.tx().fetch_option_one(&0).unwrap();
-        
+
         // Assert
         assert!(fetched_model_0.is_none());
         assert!(fetched_model_1.is_none());
-
     }
 
     #[test]
     fn update_should_update_a_model() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model = NewModel {
-            id: 1,
-            data: 1111,
-        };
+        let model = NewModel { id: 1, data: 1111 };
         {
             let mut tx = db.tx();
             tx.save(model.clone()).unwrap();
@@ -474,7 +444,7 @@ mod test {
         tx.update(updated_model.clone()).unwrap();
         tx.commit();
         let fetched_model_1 = db.fetch_one(&model.id).unwrap();
-        
+
         // Assert
         assert_eq!(model.id, fetched_model_0.id);
         assert_eq!(model.data, fetched_model_0.data);
@@ -502,21 +472,17 @@ mod test {
             tx.inner_commit()
         };
         let fetched_model = db.fetch_option_one(&model.id).unwrap();
-        
+
         // Assert
         assert!(update_result.is_err());
         assert!(fetched_model.is_none());
-
     }
 
     #[test]
     fn update_should_fail_if_version_mismatch() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model = NewModel {
-            id: 1,
-            data: 1111,
-        };
+        let model = NewModel { id: 1, data: 1111 };
         {
             let mut tx = db.tx();
             tx.save(model.clone()).unwrap();
@@ -525,18 +491,18 @@ mod test {
         let fetched_model_0 = db.fetch_one(&model.id).unwrap();
 
         // Act
-        let result_1 =         {
+        let result_1 = {
             let mut tx = db.tx();
             tx.update(fetched_model_0.clone()).unwrap();
             tx.inner_commit()
         };
         // this should fail because the version does not match
-        let result_2 =         {
+        let result_2 = {
             let mut tx = db.tx();
             tx.update(fetched_model_0.clone()).unwrap();
             tx.inner_commit()
         };
-        
+
         let fetched_model_1 = db.fetch_one(&model.id).unwrap();
         let result_3 = {
             let mut tx = db.tx();
@@ -544,7 +510,7 @@ mod test {
             tx.inner_commit()
         };
         let fetched_model_2 = db.fetch_one(&model.id).unwrap();
-        
+
         // Assert
         assert_eq!(model.id, fetched_model_0.id);
         assert_eq!(model.data, fetched_model_0.data);
@@ -565,10 +531,7 @@ mod test {
     fn delete_should_delete_a_model() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model = NewModel {
-            id: 1,
-            data: 1123,
-        };
+        let model = NewModel { id: 1, data: 1123 };
         {
             let mut tx = db.tx();
             tx.save(model.clone()).unwrap();
@@ -588,23 +551,19 @@ mod test {
             tx.delete(&model.id).unwrap();
             tx.inner_commit()
         };
-        
+
         // Assert
         assert!(fetched_before.is_some());
         assert!(delete_result_1.is_ok());
         assert!(fetched_after.is_none());
         assert!(delete_result_2.is_err());
-
     }
 
     #[test]
     fn delete_option_should_delete_a_model() {
         // Arrange
         let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
-        let model = NewModel {
-            id: 1,
-            data: 1123,
-        };
+        let model = NewModel { id: 1, data: 1123 };
         {
             let mut tx = db.tx();
             tx.save(model.clone()).unwrap();
@@ -624,13 +583,11 @@ mod test {
             tx.delete_option(&model.id).unwrap();
             tx.inner_commit()
         };
-        
+
         // Assert
         assert!(fetched_before.is_some());
         assert!(delete_result_1.is_ok());
         assert!(fetched_after.is_none());
         assert!(!delete_result_2.is_ok());
-
     }
-
 }

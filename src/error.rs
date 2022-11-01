@@ -3,35 +3,19 @@ use thiserror::Error;
 #[derive(Error, Debug, PartialEq)]
 pub enum TxError {
     #[error("FetchError: {message}")]
-    FetchError {
-        message: String,
-    },
+    FetchError { message: String },
     #[error("FetchNotFoundError: {message}")]
-    FetchNotFoundError {
-        message: String,
-    },
+    FetchNotFoundError { message: String },
     #[error("UpdateOptimisticLockError: {message}")]
-    UpdateOptimisticLockError {
-        message: String,
-    },
+    UpdateOptimisticLockError { message: String },
     #[error("UpdateError: {message}")]
-    UpdateError {
-        message: String,
-    },
+    UpdateError { message: String },
     #[error("SaveError: {message}")]
-    SaveError {
-        message: String,
-    },
+    SaveError { message: String },
     #[error("DeleteError: {message}")]
-    DeleteError {
-        message: String,
-    },
+    DeleteError { message: String },
     #[error("DeleteNotFoundError: {message}")]
-    DeleteNotFoundError {
-        message: String,
-    },
+    DeleteNotFoundError { message: String },
     #[error("DeleteOptimisticLockError: {message}")]
-    DeleteOptimisticLockError {
-        message: String,
-    },
+    DeleteOptimisticLockError { message: String },
 }
