@@ -1,7 +1,8 @@
 pub type VersionType = u32;
 
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "candid", derive(candid::CandidType, candid::Deserialize))]
+#[cfg_attr(feature = "candid", derive(candid::CandidType))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Model<IdType, Data> {
     pub id: IdType,
     pub(crate) version: VersionType,
@@ -49,7 +50,8 @@ impl<IdType, Data> From<(IdType, VersionType, Data)> for Model<IdType, Data> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "candid", derive(candid::CandidType, candid::Deserialize))]
+#[cfg_attr(feature = "candid", derive(candid::CandidType))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NewModel<IdType, Data> {
     pub id: IdType,
     pub data: Data,
