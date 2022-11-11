@@ -29,10 +29,13 @@ impl<Data, B: Backend<Data>> IcTx<Data, B> {
         Tx::new(self.backend.clone())
     }
 
+    /// Fetches a model from the database.
+    /// Returns an error if no model is found with the specified id.
     pub fn fetch_one(&self, id: &B::IdType) -> Result<Model<B::IdType, Data>, TxError> {
         self.backend.borrow().fetch_one(id)
     }
 
+    /// Fetches a model from the database.
     pub fn fetch_option_one(
         &self,
         id: &B::IdType,

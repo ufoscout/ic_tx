@@ -37,6 +37,8 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
         }
     }
 
+    /// Fetches a model from the database.
+    /// Returns an error if no model is found with the specified id.
     pub fn fetch_one(&mut self, id: &B::IdType) -> Result<Model<B::IdType, Data>, TxError> {
         let result = self.backend.borrow().fetch_one(id);
         /*
@@ -50,6 +52,7 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
         result
     }
 
+    /// Fetches a model from the database.
     pub fn fetch_option_one(
         &mut self,
         id: &B::IdType,
@@ -66,39 +69,35 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
         result
     }
 
+    /// Updates a model of the database.
+    /// The transaction will fail if the model does not exist or if the model version does not match.
     pub fn update(&mut self, model: Model<B::IdType, Data>) -> Result<(), TxError> {
         self.actions.push(Action::Update { model });
         Ok(())
     }
 
-    pub fn delete(&mut self, id: &B::IdType) -> Result<(), TxError> {
-        let result = self.backend.borrow().fetch_version(id);
-        match result {
-            Ok(version) => {
-                self.actions.push(Action::Delete {
-                    id: id.clone(),
-                    version,
-                });
-            }
-            _ => (),
-        };
+    /// Deletes a model from the database.
+    /// The transaction will fail if the model does not exist or if the model version does not match.
+    pub fn delete(&mut self, model: Model<B::IdType, Data>) -> Result<(), TxError> {
+        self.actions.push(Action::Delete {
+            id: model.id,
+            version: model.version,
+        });
         Ok(())
     }
 
-    pub fn delete_option(&mut self, id: &B::IdType) -> Result<(), TxError> {
-        let result = self.backend.borrow().fetch_option_version(id);
-        match result {
-            Ok(Some(version)) => {
-                self.actions.push(Action::DeleteOption {
-                    id: id.clone(),
-                    version,
-                });
-            }
-            _ => (),
-        };
+    /// Deletes a model from the database.
+    /// The transaction will fail if the model version does not match but it will succeed if the model does not exist.
+    pub fn delete_option(&mut self, model: Model<B::IdType, Data>) -> Result<(), TxError> {
+        self.actions.push(Action::DeleteOption {
+            id: model.id,
+            version: model.version,
+        });
         Ok(())
     }
 
+    /// Creates a new model in the database.
+    /// The transaction will fail if a model with the same ID already exists.
     pub fn save(&mut self, model: NewModel<B::IdType, Data>) -> Result<(), TxError> {
         self.actions.push(Action::Create { model });
         Ok(())
@@ -331,11 +330,11 @@ mod test {
 
         // Act
         let mut tx_1 = db.tx();
-        tx_1.delete(&model_1.id).unwrap();
+        tx_1.delete(model_1.clone()).unwrap();
 
         let tx_2_result = {
             let mut tx_2 = db.tx();
-            tx_2.delete(&model_1.id).unwrap();
+            tx_2.delete(model_1.clone()).unwrap();
             tx_2.inner_commit()
         };
 
@@ -458,7 +457,7 @@ mod test {
     }
 
     #[test]
-    fn update_should_fail_if_key_does_not_exists() {
+    fn update_should_fail_if_id_does_not_exists() {
         // Arrange
         let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model = Model {
@@ -530,27 +529,29 @@ mod test {
     }
 
     #[test]
-    fn delete_should_delete_a_model() {
+    fn delete_should_delete_an_existing_model() {
         // Arrange
         let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
-        let model = NewModel { id: 1, data: 1123 };
+        let new_model = NewModel { id: 1, data: 1123 };
         {
             let mut tx = db.tx();
-            tx.save(model.clone()).unwrap();
+            tx.save(new_model.clone()).unwrap();
             tx.commit();
         }
+
+        let model = db.fetch_one(&new_model.id).unwrap();
 
         // Act
         let fetched_before = db.fetch_option_one(&model.id).unwrap();
         let delete_result_1 = {
             let mut tx = db.tx();
-            tx.delete(&model.id).unwrap();
+            tx.delete(model.clone()).unwrap();
             tx.inner_commit()
         };
         let fetched_after = db.fetch_option_one(&model.id).unwrap();
         let delete_result_2 = {
             let mut tx = db.tx();
-            tx.delete(&model.id).unwrap();
+            tx.delete(model.clone()).unwrap();
             tx.inner_commit()
         };
 
@@ -562,27 +563,63 @@ mod test {
     }
 
     #[test]
+    fn delete_should_fail_if_version_does_not_match() {
+        // Arrange
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
+        let new_model = NewModel { id: 1, data: 1123 };
+        {
+            let mut tx = db.tx();
+            tx.save(new_model.clone()).unwrap();
+            tx.commit();
+        }
+
+        let model = db.fetch_one(&new_model.id).unwrap();
+
+        // Act
+        {
+            let mut tx = db.tx();
+            tx.update(model.clone()).unwrap();
+            tx.inner_commit().unwrap()
+        };
+        // this should fail because the version does not match
+        let delete_result_1 = {
+            let mut tx = db.tx();
+            tx.delete(model.clone()).unwrap();
+            tx.inner_commit()
+        };
+        let fetched_after = db.fetch_option_one(&model.id).unwrap();
+
+        // Assert
+        assert!(delete_result_1.is_err());
+        assert!(fetched_after.is_some());
+
+    }
+
+
+    #[test]
     fn delete_option_should_delete_a_model() {
         // Arrange
         let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
-        let model = NewModel { id: 1, data: 1123 };
+        let new_model = NewModel { id: 1, data: 1123 };
         {
             let mut tx = db.tx();
-            tx.save(model.clone()).unwrap();
+            tx.save(new_model.clone()).unwrap();
             tx.commit();
         }
+
+        let model = db.fetch_one(&new_model.id).unwrap();
 
         // Act
         let fetched_before = db.fetch_option_one(&model.id).unwrap();
         let delete_result_1 = {
             let mut tx = db.tx();
-            tx.delete_option(&model.id).unwrap();
+            tx.delete_option(model.clone()).unwrap();
             tx.inner_commit()
         };
         let fetched_after = db.fetch_option_one(&model.id).unwrap();
         let delete_result_2 = {
             let mut tx = db.tx();
-            tx.delete_option(&model.id).unwrap();
+            tx.delete_option(model.clone()).unwrap();
             tx.inner_commit()
         };
 
@@ -590,6 +627,40 @@ mod test {
         assert!(fetched_before.is_some());
         assert!(delete_result_1.is_ok());
         assert!(fetched_after.is_none());
-        assert!(!delete_result_2.is_ok());
+        assert!(delete_result_2.is_ok());
     }
+
+    #[test]
+    fn delete_option_should_fail_if_version_does_not_match() {
+        // Arrange
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
+        let new_model = NewModel { id: 1, data: 1123 };
+        {
+            let mut tx = db.tx();
+            tx.save(new_model.clone()).unwrap();
+            tx.commit();
+        }
+
+        let model = db.fetch_one(&new_model.id).unwrap();
+
+        // Act
+        {
+            let mut tx = db.tx();
+            tx.update(model.clone()).unwrap();
+            tx.inner_commit().unwrap()
+        };
+        // this should fail because the version does not match
+        let delete_result_1 = {
+            let mut tx = db.tx();
+            tx.delete_option(model.clone()).unwrap();
+            tx.inner_commit()
+        };
+        let fetched_after = db.fetch_option_one(&model.id).unwrap();
+
+        // Assert
+        assert!(delete_result_1.is_err());
+        assert!(fetched_after.is_some());
+
+    }
+
 }
