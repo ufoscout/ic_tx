@@ -158,7 +158,7 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
             match action {
                 Action::Create { model } => backend.save(model)?,
                 // Action::Read { .. } => (),
-                Action::Update { model } => backend.update(model)?,
+                Action::Update { model } => backend.update(model.into_new_version())?,
                 Action::Delete { id, version: _ } => backend.delete(&id)?,
                 Action::DeleteOption { id, version: _ } => {
                     backend.delete_option(&id).map(|_| ())?

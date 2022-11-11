@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::HashMap,
     fmt::Display,
     hash::Hash,
 };
@@ -70,24 +70,8 @@ impl<IdType: Eq + Hash + Clone + Display, Data: Clone> Backend<Data>
     }
 
     fn update(&mut self, model: Model<Self::IdType, Data>) -> Result<(), TxError> {
-        match self.map.entry(model.id.clone()) {
-            Entry::Occupied(mut previous) => {
-                let previous_version = previous.get().version;
-                if previous_version == model.version {
-                    let updated_model = model.into_new_version();
-                    previous.insert(updated_model);
-                    Ok(())
-                } else {
-                    Err(TxError::UpdateOptimisticLockError { message: format!("Cannot update model with id [{}]. Expected version [{}], version found [{}]", model.id, model.version, previous_version) })
-                }
-            }
-            Entry::Vacant(_) => Err(TxError::UpdateError {
-                message: format!(
-                    "Cannot update model with id [{}] because it does not exist.",
-                    model.id
-                ),
-            }),
-        }
+        self.map.insert(model.id.clone(), model);
+        Ok(())
     }
 
     fn delete(&mut self, id: &Self::IdType) -> Result<(), TxError> {
@@ -113,19 +97,10 @@ impl<IdType: Eq + Hash + Clone + Display, Data: Clone> Backend<Data>
     }
 
     fn save(&mut self, model: NewModel<Self::IdType, Data>) -> Result<(), TxError> {
-        match self.map.entry(model.id.clone()) {
-            Entry::Occupied(_) => Err(TxError::UpdateError {
-                message: format!(
-                    "Cannot save model with id [{}] because the id is already in use.",
-                    model.id
-                ),
-            }),
-            Entry::Vacant(v) => {
-                v.insert(Model::from(model));
-                Ok(())
-            }
-        }
+        self.map.insert(model.id.clone(), model.into());
+        Ok(())
     }
+
 }
 
 #[cfg(test)]
@@ -150,25 +125,6 @@ mod test {
         assert_eq!(0, fetched_model.version);
 
         assert_eq!(Some(fetched_model), fetched_model_opt);
-    }
-
-    #[test]
-    fn save_should_fail_if_key_exists() {
-        // Arrange
-        let mut backend = HashmapBackend::new();
-        let model = NewModel { id: 1, data: 1123 };
-
-        // Act
-        let first_save = backend.save(model.clone());
-        let second_save = backend.save(model.clone());
-        let fetched_model = backend.fetch_one(&model.id).unwrap();
-
-        // Assert
-        assert!(first_save.is_ok());
-        assert!(second_save.is_err());
-        assert_eq!(model.id, fetched_model.id);
-        assert_eq!(model.data, fetched_model.data);
-        assert_eq!(0, fetched_model.version);
     }
 
     #[test]
@@ -254,60 +210,9 @@ mod test {
 
         assert_eq!(model.id, fetched_model_1.id);
         assert_eq!(updated_model.data, fetched_model_1.data);
-        assert_eq!(1, fetched_model_1.version);
+        assert_eq!(0, fetched_model_1.version);
     }
 
-    #[test]
-    fn update_should_fail_if_key_does_not_exists() {
-        // Arrange
-        let mut backend = HashmapBackend::new();
-        let model = Model {
-            id: 1,
-            version: 0,
-            data: 1111,
-        };
-
-        // Act
-        let update_result = backend.update(model.clone());
-        let fetched_model = backend.fetch_option_one(&model.id).unwrap();
-
-        // Assert
-        assert!(update_result.is_err());
-        assert!(fetched_model.is_none());
-    }
-
-    #[test]
-    fn update_should_fail_if_version_mismatch() {
-        // Arrange
-        let mut backend = HashmapBackend::new();
-        let model = NewModel { id: 1, data: 1111 };
-        backend.save(model.clone()).unwrap();
-        let fetched_model_0 = backend.fetch_one(&model.id).unwrap();
-
-        // Act
-        let result_1 = backend.update(fetched_model_0.clone());
-        // this should fail because the version does not match
-        let result_2 = backend.update(fetched_model_0.clone());
-
-        let fetched_model_1 = backend.fetch_one(&model.id).unwrap();
-        let result_3 = backend.update(fetched_model_1.clone());
-        let fetched_model_2 = backend.fetch_one(&model.id).unwrap();
-
-        // Assert
-        assert_eq!(model.id, fetched_model_0.id);
-        assert_eq!(model.data, fetched_model_0.data);
-        assert_eq!(0, fetched_model_0.version);
-
-        assert!(result_1.is_ok());
-        assert!(result_2.is_err());
-        assert!(result_3.is_ok());
-
-        assert_eq!(model.id, fetched_model_1.id);
-        assert_eq!(1, fetched_model_1.version);
-
-        assert_eq!(model.id, fetched_model_2.id);
-        assert_eq!(2, fetched_model_2.version);
-    }
 
     #[test]
     fn delete_should_delete_a_model() {
