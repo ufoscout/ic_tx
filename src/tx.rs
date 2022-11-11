@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, vec};
+use std::{marker::PhantomData, vec, cell::RefCell};
 
 use crate::{
     backend::Backend,
@@ -22,13 +22,13 @@ const COMMIT_PANIC_MESSAGE: &str = "Cannot commit the transaction";
 
 pub struct Tx<Data, B: Backend<Data>> {
     actions: Vec<Action<B::IdType, Data>>,
-    backend: Ref<B>,
+    backend: Ref<RefCell<B>>,
     completed: bool,
     phantom_data: PhantomData<Data>,
 }
 
 impl<Data, B: Backend<Data>> Tx<Data, B> {
-    pub(crate) fn new(backend: Ref<B>) -> Self {
+    pub(crate) fn new(backend: Ref<RefCell<B>>) -> Self {
         Self {
             actions: vec![],
             backend,
@@ -38,7 +38,7 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
     }
 
     pub fn fetch_one(&mut self, id: &B::IdType) -> Result<Model<B::IdType, Data>, TxError> {
-        let result = self.backend.fetch_one(id);
+        let result = self.backend.borrow().fetch_one(id);
         /*
         match &result {
             Ok(model) => {
@@ -54,7 +54,7 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
         &mut self,
         id: &B::IdType,
     ) -> Result<Option<Model<B::IdType, Data>>, TxError> {
-        let result = self.backend.fetch_option_one(id);
+        let result = self.backend.borrow().fetch_option_one(id);
         /*
         match &result {
             Ok(Some(model)) => {
@@ -72,7 +72,7 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
     }
 
     pub fn delete(&mut self, id: &B::IdType) -> Result<(), TxError> {
-        let result = self.backend.fetch_version(id);
+        let result = self.backend.borrow().fetch_version(id);
         match result {
             Ok(version) => {
                 self.actions.push(Action::Delete {
@@ -86,7 +86,7 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
     }
 
     pub fn delete_option(&mut self, id: &B::IdType) -> Result<(), TxError> {
-        let result = self.backend.fetch_option_version(id);
+        let result = self.backend.borrow().fetch_option_version(id);
         match result {
             Ok(Some(version)) => {
                 self.actions.push(Action::DeleteOption {
@@ -116,11 +116,13 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
 
         self.completed = true;
 
+        let mut backend = self.backend.borrow_mut();
+
         // Step 1: check that models have the expected version
         for action in &self.actions {
             match action {
                 Action::Create { model } => {
-                    if self.backend.fetch_option_version(&model.id)?.is_some() {
+                    if backend.fetch_option_version(&model.id)?.is_some() {
                         return Err(TxError::SaveError { message: format!("Cannot save model with id [{}] because the id is already in use.", model.id) });
                     }
                 },
@@ -130,21 +132,21 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
                 //    }
                 // }
                 Action::Update { model } => {
-                    match self.backend.fetch_option_version(&model.id)? {
+                    match backend.fetch_option_version(&model.id)? {
                         Some(fetch_version) if fetch_version == model.version => (),
                         Some(fetch_version) => return Err(TxError::UpdateOptimisticLockError { message: format!("Cannot update model with id [{}]. Expected version [{}], version found [{}]", model.id, model.version, fetch_version) }),
                         None => return Err(TxError::UpdateError { message: format!("Cannot update model with id [{}] because it does not exist.", model.id) }),
                     }
                 },
                 Action::Delete { id, version } => {
-                    match self.backend.fetch_option_version(id)? {
+                    match backend.fetch_option_version(id)? {
                         Some(fetch_version) if fetch_version == *version => (),
                         Some(fetch_version) => return Err(TxError::DeleteOptimisticLockError { message: format!("Cannot delete model with id [{}]. Expected version [{}], version found [{}]", id, version, fetch_version) }),
                         None => return Err(TxError::DeleteError { message: format!("Cannot delete model with id [{}] because it does not exist.", id) }),
                     }
                 },
                 Action::DeleteOption { id, version } => {
-                    match self.backend.fetch_option_version(id)? {
+                    match backend.fetch_option_version(id)? {
                         Some(fetch_version) if fetch_version == *version => (),
                         Some(fetch_version) => return Err(TxError::DeleteOptimisticLockError { message: format!("Cannot delete model with id [{}]. Expected version [{}], version found [{}]", id, version, fetch_version) }),
                         None => (),
@@ -155,12 +157,12 @@ impl<Data, B: Backend<Data>> Tx<Data, B> {
 
         for action in self.actions.drain(..) {
             match action {
-                Action::Create { model } => self.backend.save(model)?,
+                Action::Create { model } => backend.save(model)?,
                 // Action::Read { .. } => (),
-                Action::Update { model } => self.backend.update(model)?,
-                Action::Delete { id, version: _ } => self.backend.delete(&id)?,
+                Action::Update { model } => backend.update(model)?,
+                Action::Delete { id, version: _ } => backend.delete(&id)?,
                 Action::DeleteOption { id, version: _ } => {
-                    self.backend.delete_option(&id).map(|_| ())?
+                    backend.delete_option(&id).map(|_| ())?
                 }
             }
         }
@@ -186,7 +188,7 @@ mod test {
     #[test]
     fn should_commit_a_tx() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model = NewModel { id: 1, data: 1123 };
 
         // Act
@@ -208,7 +210,7 @@ mod test {
     #[test]
     fn should_rollback_a_tx() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model = NewModel { id: 1, data: 1123 };
 
         // Act
@@ -226,7 +228,7 @@ mod test {
     #[should_panic]
     fn commit_should_panic_if_failure() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
 
         // Act
         {
@@ -247,7 +249,7 @@ mod test {
     #[test]
     fn commit_should_fail_if_concurrent_creation() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model_1 = NewModel { id: 1, data: 1111 };
 
         let model_2 = NewModel { id: 1, data: 2222 };
@@ -278,7 +280,7 @@ mod test {
     #[test]
     fn commit_should_fail_if_concurrent_update() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model_1 = NewModel { id: 1, data: 1111 };
         {
             let mut tx = db.tx();
@@ -318,7 +320,7 @@ mod test {
     #[test]
     fn commit_should_fail_if_concurrent_delete() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model_1 = NewModel { id: 1, data: 1111 };
         {
             let mut tx = db.tx();
@@ -351,7 +353,7 @@ mod test {
     #[test]
     fn save_should_save_a_model() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model = NewModel { id: 1, data: 1123 };
 
         // Act
@@ -373,7 +375,7 @@ mod test {
     #[test]
     fn save_should_fail_if_key_exists() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model = NewModel { id: 1, data: 1123 };
 
         // Act
@@ -400,7 +402,7 @@ mod test {
     #[test]
     fn fetch_one_should_fail_if_missing() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
 
         // Act
         let fetched_model_0 = db.fetch_one(&0);
@@ -414,7 +416,7 @@ mod test {
     #[test]
     fn fetch_option_one_should_return_none_if_missing() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
 
         // Act
         let fetched_model_0 = db.fetch_option_one(&0).unwrap();
@@ -428,7 +430,7 @@ mod test {
     #[test]
     fn update_should_update_a_model() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model = NewModel { id: 1, data: 1111 };
         {
             let mut tx = db.tx();
@@ -458,7 +460,7 @@ mod test {
     #[test]
     fn update_should_fail_if_key_does_not_exists() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model = Model {
             id: 1,
             version: 0,
@@ -481,7 +483,7 @@ mod test {
     #[test]
     fn update_should_fail_if_version_mismatch() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model = NewModel { id: 1, data: 1111 };
         {
             let mut tx = db.tx();
@@ -530,7 +532,7 @@ mod test {
     #[test]
     fn delete_should_delete_a_model() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model = NewModel { id: 1, data: 1123 };
         {
             let mut tx = db.tx();
@@ -562,7 +564,7 @@ mod test {
     #[test]
     fn delete_option_should_delete_a_model() {
         // Arrange
-        let db = IcTx::new(Rc::new(HashmapBackend::<i32, i32>::new()));
+        let db = IcTx::new(Rc::new(RefCell::new(HashmapBackend::<i32, i32>::new())));
         let model = NewModel { id: 1, data: 1123 };
         {
             let mut tx = db.tx();

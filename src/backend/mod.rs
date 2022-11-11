@@ -17,8 +17,8 @@ pub trait Backend<Data> {
     ) -> Result<Option<Model<Self::IdType, Data>>, TxError>;
     fn fetch_version(&self, id: &Self::IdType) -> Result<VersionType, TxError>;
     fn fetch_option_version(&self, id: &Self::IdType) -> Result<Option<VersionType>, TxError>;
-    fn update(&self, model: Model<Self::IdType, Data>) -> Result<(), TxError>;
-    fn delete(&self, id: &Self::IdType) -> Result<(), TxError>;
-    fn delete_option(&self, id: &Self::IdType) -> Result<bool, TxError>;
-    fn save(&self, model: NewModel<Self::IdType, Data>) -> Result<(), TxError>;
+    fn update(&mut self, model: Model<Self::IdType, Data>) -> Result<(), TxError>;
+    fn delete(&mut self, id: &Self::IdType) -> Result<(), TxError>;
+    fn delete_option(&mut self, id: &Self::IdType) -> Result<bool, TxError>;
+    fn save(&mut self, model: NewModel<Self::IdType, Data>) -> Result<(), TxError>;
 }

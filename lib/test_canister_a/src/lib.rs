@@ -6,7 +6,7 @@ use ic_tx::{
     db::IcTx,
     model::{Model, NewModel},
 };
-use std::rc::Rc;
+use std::{rc::Rc, cell::RefCell};
 use test_canister_b::CanisterB;
 
 use ic_canister::{query, update};
@@ -20,7 +20,7 @@ pub struct Data {
 }
 
 thread_local! {
-    pub static DB: DbType = IcTx::new(Rc::new(HashmapBackend::new()));
+    pub static DB: DbType = IcTx::new(Rc::new(RefCell::new(HashmapBackend::new())));
 }
 
 #[derive(Canister)]

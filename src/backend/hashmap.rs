@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     collections::{hash_map::Entry, HashMap},
     fmt::Display,
     hash::Hash,
@@ -13,14 +12,26 @@ use crate::{
 use super::Backend;
 
 pub struct HashmapBackend<IdType: Eq + Hash + Clone, Data: Clone> {
-    map: RefCell<HashMap<IdType, Model<IdType, Data>>>,
+    map: HashMap<IdType, Model<IdType, Data>>,
 }
 
 impl<IdType: Eq + Hash + Clone, Data: Clone> HashmapBackend<IdType, Data> {
     pub fn new() -> Self {
         HashmapBackend {
-            map: RefCell::new(HashMap::default()),
+            map: HashMap::default(),
         }
+    }
+
+    pub fn with_map(map: HashMap<IdType, Model<IdType, Data>>) -> Self {
+        HashmapBackend {
+            map,
+        }
+    }
+}
+
+impl <IdType: Eq + Hash + Clone, Data: Clone> From<HashMap<IdType, Model<IdType, Data>>> for HashmapBackend<IdType, Data> {
+    fn from(map: HashMap<IdType, Model<IdType, Data>>) -> Self {
+        Self::with_map(map)
     }
 }
 
@@ -42,7 +53,7 @@ impl<IdType: Eq + Hash + Clone + Display, Data: Clone> Backend<Data>
         &self,
         id: &Self::IdType,
     ) -> Result<Option<Model<Self::IdType, Data>>, TxError> {
-        Ok(self.map.borrow().get(id).map(|val| (*val).clone()))
+        Ok(self.map.get(id).map(|val| (*val).clone()))
     }
 
     fn fetch_version(&self, id: &Self::IdType) -> Result<VersionType, TxError> {
@@ -55,13 +66,11 @@ impl<IdType: Eq + Hash + Clone + Display, Data: Clone> Backend<Data>
     }
 
     fn fetch_option_version(&self, id: &Self::IdType) -> Result<Option<VersionType>, TxError> {
-        Ok(self.map.borrow().get(id).map(|val| val.version))
+        Ok(self.map.get(id).map(|val| val.version))
     }
 
-    fn update(&self, model: Model<Self::IdType, Data>) -> Result<(), TxError> {
-        let mut map = self.map.borrow_mut();
-
-        match map.entry(model.id.clone()) {
+    fn update(&mut self, model: Model<Self::IdType, Data>) -> Result<(), TxError> {
+        match self.map.entry(model.id.clone()) {
             Entry::Occupied(mut previous) => {
                 let previous_version = previous.get().version;
                 if previous_version == model.version {
@@ -81,7 +90,7 @@ impl<IdType: Eq + Hash + Clone + Display, Data: Clone> Backend<Data>
         }
     }
 
-    fn delete(&self, id: &Self::IdType) -> Result<(), TxError> {
+    fn delete(&mut self, id: &Self::IdType) -> Result<(), TxError> {
         match self.delete_option(id) {
             Ok(opt) => {
                 if opt {
@@ -99,14 +108,12 @@ impl<IdType: Eq + Hash + Clone + Display, Data: Clone> Backend<Data>
         }
     }
 
-    fn delete_option(&self, id: &Self::IdType) -> Result<bool, TxError> {
-        let mut map = self.map.borrow_mut();
-        Ok(map.remove(id).is_some())
+    fn delete_option(&mut self, id: &Self::IdType) -> Result<bool, TxError> {
+        Ok(self.map.remove(id).is_some())
     }
 
-    fn save(&self, model: NewModel<Self::IdType, Data>) -> Result<(), TxError> {
-        let mut map = self.map.borrow_mut();
-        match map.entry(model.id.clone()) {
+    fn save(&mut self, model: NewModel<Self::IdType, Data>) -> Result<(), TxError> {
+        match self.map.entry(model.id.clone()) {
             Entry::Occupied(_) => Err(TxError::UpdateError {
                 message: format!(
                     "Cannot save model with id [{}] because the id is already in use.",
@@ -129,7 +136,7 @@ mod test {
     #[test]
     fn save_should_save_a_model() {
         // Arrange
-        let backend = HashmapBackend::new();
+        let mut backend = HashmapBackend::new();
         let model = NewModel { id: 1, data: 1123 };
 
         // Act
@@ -148,7 +155,7 @@ mod test {
     #[test]
     fn save_should_fail_if_key_exists() {
         // Arrange
-        let backend = HashmapBackend::new();
+        let mut backend = HashmapBackend::new();
         let model = NewModel { id: 1, data: 1123 };
 
         // Act
@@ -191,7 +198,7 @@ mod test {
     #[test]
     fn should_return_the_version() {
         // Arrange
-        let backend = HashmapBackend::new();
+        let mut backend = HashmapBackend::new();
         let model = NewModel { id: 1, data: 1123 };
 
         // Act
@@ -229,7 +236,7 @@ mod test {
     #[test]
     fn update_should_update_a_model() {
         // Arrange
-        let backend = HashmapBackend::new();
+        let mut backend = HashmapBackend::new();
         let model = NewModel { id: 1, data: 1111 };
         backend.save(model.clone()).unwrap();
         let fetched_model_0 = backend.fetch_one(&model.id).unwrap();
@@ -253,7 +260,7 @@ mod test {
     #[test]
     fn update_should_fail_if_key_does_not_exists() {
         // Arrange
-        let backend = HashmapBackend::new();
+        let mut backend = HashmapBackend::new();
         let model = Model {
             id: 1,
             version: 0,
@@ -272,7 +279,7 @@ mod test {
     #[test]
     fn update_should_fail_if_version_mismatch() {
         // Arrange
-        let backend = HashmapBackend::new();
+        let mut backend = HashmapBackend::new();
         let model = NewModel { id: 1, data: 1111 };
         backend.save(model.clone()).unwrap();
         let fetched_model_0 = backend.fetch_one(&model.id).unwrap();
@@ -305,7 +312,7 @@ mod test {
     #[test]
     fn delete_should_delete_a_model() {
         // Arrange
-        let backend = HashmapBackend::new();
+        let mut backend = HashmapBackend::new();
         let model = NewModel { id: 1, data: 1123 };
         backend.save(model.clone()).unwrap();
 
@@ -325,7 +332,7 @@ mod test {
     #[test]
     fn delete_option_should_delete_a_model() {
         // Arrange
-        let backend = HashmapBackend::new();
+        let mut backend = HashmapBackend::new();
         let model = NewModel { id: 1, data: 1123 };
         backend.save(model.clone()).unwrap();
 
