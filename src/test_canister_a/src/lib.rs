@@ -1,6 +1,4 @@
-use candid::{CandidType, Deserialize};
-use ic_canister::{canister_call, Canister, PreUpdate};
-use ic_exports::ic_cdk::export::candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use ic_tx::{
     backend::hashmap::HashmapBackend,
     db::IcTx,
@@ -8,8 +6,6 @@ use ic_tx::{
 };
 use std::{rc::Rc, cell::RefCell};
 use test_canister_b::CanisterB;
-
-use ic_canister::{query, update};
 
 pub type DbType = IcTx<Data, HashmapBackend<u32, Data>>;
 

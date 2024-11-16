@@ -1,0 +1,20 @@
+[package]
+name = "test_canister_a"
+
+authors.workspace = true
+homepage.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+candid = { workspace = true }
+ic-cdk = { workspace = true }
+ic_tx = { workspace = true }
+serde = { workspace = true }
+test_canister_b = { workspace = true }
+
+[dev-dependencies]
+futures = { workspace = true }
+tokio = { workspace = true }

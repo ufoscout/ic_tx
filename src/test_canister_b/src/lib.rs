@@ -1,9 +1,4 @@
-use ic_canister::PreUpdate;
-use ic_exports::ic_cdk::export::candid::{CandidType, Deserialize, Principal};
-use ic_storage::{stable::Versioned, IcStorage};
 use std::{cell::RefCell, rc::Rc};
-
-use ic_canister::{generate_exports, query, state_getter, Canister};
 
 #[derive(Default, CandidType, Deserialize, IcStorage)]
 pub struct StateB {

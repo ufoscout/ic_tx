@@ -1,9 +1,0 @@
-type Data = record { username : text; tokens : nat32 };
-type Model = record { id : nat32; data : Data; version : nat32 };
-service : {
-  create_user : (nat32, text) -> ();
-  create_user_rollback : (nat32, text) -> ();
-  get_user : (nat32) -> (opt Model) query;
-  update_user : (nat32, nat32) -> ();
-  update_user_concurrent_error : (nat32, nat32) -> ();
-}
