@@ -1,32 +1,21 @@
-use std::{cell::RefCell, rc::Rc};
+use ic_cdk::{query, update};
+use std::cell::RefCell;
 
-#[derive(Default, CandidType, Deserialize, IcStorage)]
-pub struct StateB {
-    counter: u32,
+thread_local! {
+    static COUNTER: RefCell<u64> = RefCell::new(999_999_999);
 }
 
-impl Versioned for StateB {
-    type Previous = ();
-
-    fn upgrade((): ()) -> Self {
-        Self::default()
-    }
+/// Get the value of the counter.
+#[query]
+fn get_counter() -> u64 {
+    COUNTER.with(|c| (*c.borrow()).clone())
 }
 
-pub trait CanisterB: Canister {
-    #[state_getter]
-    fn state(&self) -> Rc<RefCell<StateB>>;
-
-    #[query(trait = true)]
-    fn get_counter(&self) -> u32 {
-        self.state().borrow().counter
-    }
+/// Increment the value of the counter.
+#[update]
+fn inc() {
+    COUNTER.with(|counter| *counter.borrow_mut() += 1);
 }
 
-generate_exports!(CanisterB, CanisterBImpl);
-
-pub fn generate_idl() -> String {
-    use ic_canister::{generate_idl, Idl};
-    let canister_idl = generate_idl!();
-    candid::bindings::candid::compile(&canister_idl.env.env, &Some(canister_idl.actor))
-}
+// Enable Candid export
+ic_cdk::export_candid!();

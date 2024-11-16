@@ -11,10 +11,10 @@ repository.workspace = true
 [dependencies]
 candid = { workspace = true }
 ic-cdk = { workspace = true }
-ic_tx = { workspace = true }
+ic_tx = { workspace = true, features = ["candid"] }
 serde = { workspace = true }
-test_canister_b = { workspace = true }
 
 [dev-dependencies]
 futures = { workspace = true }
+ic_mple_pocket_ic = { workspace = true }
 tokio = { workspace = true }

@@ -1,5 +1,3 @@
-use test_canister_a::generate_idl;
+use test_canister_a::*;
 
-fn main() {
-    println!("{}", generate_idl());
-}
+fn main() {}
