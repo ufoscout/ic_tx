@@ -1,6 +1,3 @@
-use std::fs::File;
-use std::io::Read;
-use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use candid::{CandidType, Encode, Principal};
@@ -14,31 +11,29 @@ pub fn alice() -> Principal {
 
 pub struct PocketIcTestContext {
     pub client: PocketIc,
-    pub canister_a_principal: Principal,
+    canister_a_principal: Principal,
     // pub canister_a_args: InitArgs,
-    // pub canister_b_principal: Principal,
+    canister_b_principal: Principal,
 }
 
 impl PocketIcTestContext {
 
-    pub async fn get_counter(&self, sender: Principal) -> u64 {
-        let args = &();
-        query_call(&self.client, self.canister_a_principal, sender, "get_counter", args).await
-    }
-
-    pub async fn get_counter_from_another_canister(&self, sender: Principal) -> u64 {
-        let args = &();
-        update_call(
+    pub async fn b_get_counter(&self) -> u64 {
+        query_call(
             &self.client,
-            self.canister_a_principal,
-            sender,
-            "get_counter_from_another_canister",
-            args,
+            alice(),
+            self.canister_b_principal,
+            "get_counter",
+            &(),
         ).await
     }
 
     pub async fn new() -> Self {
-        let client = get_pocket_ic_client().build_async().await;
+        let client = get_pocket_ic_client()
+        .with_nns_subnet()
+        .with_ii_subnet()
+        .with_application_subnet().build_async().await;
+
         let canister_b_principal = deploy_canister(&client, get_canister_b_bytecode(), &()).await;
         let canister_a_args = InitArgs {
             canister_b_principal,
@@ -47,10 +42,10 @@ impl PocketIcTestContext {
             deploy_canister(&client, get_canister_a_bytecode(), &canister_a_args).await;
     
         PocketIcTestContext {
-            client: client,
+            client,
             canister_a_principal,
             // canister_a_args,
-            // canister_b_principal,
+            canister_b_principal,
         }
     }
 }
@@ -68,13 +63,13 @@ async fn deploy_canister<T: CandidType>(client: &PocketIc, bytecode: Vec<u8>, ar
 fn get_canister_a_bytecode() -> Vec<u8> {
     static CANISTER_BYTECODE: OnceLock<Vec<u8>> = OnceLock::new();
     CANISTER_BYTECODE
-        .get_or_init(|| load_wasm_bytes("../target/wasm32-unknown-unknown/release/test_canister_a.wasm"))
+        .get_or_init(|| load_wasm_bytes("../../target/wasm32-unknown-unknown/release/test_canister_a.wasm"))
         .to_owned()
 }
 
 fn get_canister_b_bytecode() -> Vec<u8> {
     static CANISTER_BYTECODE: OnceLock<Vec<u8>> = OnceLock::new();
     CANISTER_BYTECODE
-        .get_or_init(|| load_wasm_bytes("../target/wasm32-unknown-unknown/release/test_canister_b.wasm"))
+        .get_or_init(|| load_wasm_bytes("../../target/wasm32-unknown-unknown/release/test_canister_b.wasm"))
         .to_owned()
 }
