@@ -16,8 +16,8 @@ thread_local! {
 
 #[derive(Clone, Debug, PartialEq, CandidType, Deserialize)]
 pub struct Data {
-    username: String,
-    tokens: u32,
+    pub username: String,
+    pub tokens: u32,
 }
 
 struct Config {

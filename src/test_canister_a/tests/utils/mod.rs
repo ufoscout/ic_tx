@@ -1,31 +1,61 @@
 use std::sync::OnceLock;
 
 use candid::{CandidType, Encode, Principal};
-use ic_mple_pocket_ic::*;
-use pocket_ic::nonblocking::PocketIc;
-use test_canister_a::InitArgs;
+use ic_mple_client::*;
+use ic_mple_pocket_ic::{pocket_ic::nonblocking::PocketIc, *};
+use ic_tx::model::Model;
+use test_canister_a::{Data, InitArgs};
 
 pub fn alice() -> Principal {
     Principal::from_text("sgymv-uiaaa-aaaaa-aaaia-cai").unwrap()
 }
 
+#[derive(Clone)]
 pub struct PocketIcTestContext {
-    pub client: PocketIc,
-    canister_a_principal: Principal,
+    pub client: PocketIcClient,
+    // canister_a_principal: Principal,
     // pub canister_a_args: InitArgs,
-    canister_b_principal: Principal,
+    // canister_b_principal: Principal,
 }
 
 impl PocketIcTestContext {
-    pub async fn b_get_counter(&self) -> u64 {
-        query_call(
-            &self.client,
-            alice(),
-            self.canister_b_principal,
-            "get_counter",
-            &(),
+
+    pub async fn create_user(&self, id: u32, username: String) {
+        self.client.update(
+            "create_user",
+            (id, username)
         )
-        .await
+        .await.unwrap()
+    }
+
+    pub async fn create_user_rollback(&self, id: u32, username: String) {
+        self.client.update(
+            "create_user_rollback",
+            (id, username)
+        )
+        .await.unwrap()
+    }
+
+    pub async fn update_user(&self, id: u32, tokens: u32) {
+        self.client.update(
+            "update_user",
+            (id, tokens)
+        ).await.unwrap()
+    }
+
+    pub async fn update_user_concurrent_error(&self, id: u32, tokens: u32) -> CanisterClientResult<()> {
+        self.client.update(
+            "update_user_concurrent_error",
+            (id, tokens)
+        ).await
+    }
+
+    pub async fn get_user(&self, id: u32) -> Option<Model<u32, Data>> {
+        self.client.query(
+            "get_user",
+            (id, ),
+        )
+        .await.unwrap()
     }
 
     pub async fn new() -> Self {
@@ -43,11 +73,13 @@ impl PocketIcTestContext {
         let canister_a_principal =
             deploy_canister(&client, get_canister_a_bytecode(), &canister_a_args).await;
 
+        
+
         PocketIcTestContext {
-            client,
-            canister_a_principal,
+            client: PocketIcClient::from_client(client, canister_a_principal, alice()),
+            // canister_a_principal,
             // canister_a_args,
-            canister_b_principal,
+            // canister_b_principal,
         }
     }
 }

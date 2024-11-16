@@ -22,7 +22,8 @@ test_canister_b = { path = "./src/test_canister_b" }
 candid = { version = "0.10" }
 futures = "0.3"
 ic-cdk = { version = "0.17" }
-ic_mple_pocket_ic = "0.2"
+ic_mple_client = "0.3"
+ic_mple_pocket_ic = "0.3"
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "2.0"
