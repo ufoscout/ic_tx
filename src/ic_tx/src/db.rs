@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, cell::RefCell};
+use std::{cell::RefCell, marker::PhantomData};
 
 use crate::{backend::Backend, error::TxError, model::Model, tx::Tx, Ref};
 

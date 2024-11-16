@@ -2,15 +2,14 @@ use utils::PocketIcTestContext;
 
 mod utils;
 
-    #[tokio::test]
-    async fn get_user_should_return_none() {
-        // Arrange
-        let ctx = PocketIcTestContext::new().await;
+#[tokio::test]
+async fn get_user_should_return_none() {
+    // Arrange
+    let ctx = PocketIcTestContext::new().await;
 
-        // Act
-        ctx.b_get_counter().await;
-    
-    }
+    // Act
+    ctx.b_get_counter().await;
+}
 
 //     #[tokio::test]
 //     async fn create_user_tx_should_be_committed() {
@@ -139,4 +138,3 @@ mod utils;
 //             result
 //         )
 //     }
-

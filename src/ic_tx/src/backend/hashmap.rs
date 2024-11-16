@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    fmt::Display,
-    hash::Hash,
-};
+use std::{collections::HashMap, fmt::Display, hash::Hash};
 
 use crate::{
     error::TxError,
@@ -23,13 +19,13 @@ impl<IdType: Eq + Hash + Clone, Data: Clone> HashmapBackend<IdType, Data> {
     }
 
     pub fn with_map(map: HashMap<IdType, Model<IdType, Data>>) -> Self {
-        HashmapBackend {
-            map,
-        }
+        HashmapBackend { map }
     }
 }
 
-impl <IdType: Eq + Hash + Clone, Data: Clone> From<HashMap<IdType, Model<IdType, Data>>> for HashmapBackend<IdType, Data> {
+impl<IdType: Eq + Hash + Clone, Data: Clone> From<HashMap<IdType, Model<IdType, Data>>>
+    for HashmapBackend<IdType, Data>
+{
     fn from(map: HashMap<IdType, Model<IdType, Data>>) -> Self {
         Self::with_map(map)
     }
@@ -100,7 +96,6 @@ impl<IdType: Eq + Hash + Clone + Display, Data: Clone> Backend<Data>
         self.map.insert(model.id.clone(), model.into());
         Ok(())
     }
-
 }
 
 #[cfg(test)]
@@ -212,7 +207,6 @@ mod test {
         assert_eq!(updated_model.data, fetched_model_1.data);
         assert_eq!(0, fetched_model_1.version);
     }
-
 
     #[test]
     fn delete_should_delete_a_model() {

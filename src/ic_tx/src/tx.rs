@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, vec, cell::RefCell};
+use std::{cell::RefCell, marker::PhantomData, vec};
 
 use crate::{
     backend::Backend,
@@ -592,9 +592,7 @@ mod test {
         // Assert
         assert!(delete_result_1.is_err());
         assert!(fetched_after.is_some());
-
     }
-
 
     #[test]
     fn delete_option_should_delete_a_model() {
@@ -660,7 +658,5 @@ mod test {
         // Assert
         assert!(delete_result_1.is_err());
         assert!(fetched_after.is_some());
-
     }
-
 }
